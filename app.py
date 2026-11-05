@@ -1,6 +1,5 @@
 from io import BytesIO
 import math
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from reportlab.lib import colors
