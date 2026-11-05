@@ -194,3 +194,280 @@ with tab1:
           data=csv_data,
           file_name=f"pcr_master_mix_{base_reactions}rxns.csv",
           mime="text/csv",
+          key="pcr_download",
+      )
+
+      st.markdown("---")
+      st.subheader("Benchside Pipetting Checklist")
+      for idx, row in full_master_mix_df.iterrows():
+        st.checkbox(
+            f"Add **{row['Component']}**: **{row['Total_Volume_uL']:.2f} µL**"
+            f" total ({row['Vol_per_rxn_uL']:.2f} µL/rxn)",
+            key=f"check_{idx}",
+        )
+
+# ==========================================
+# TAB 2: THERMAL CYCLER PROTOCOL BUILDER
+# ==========================================
+with tab2:
+  st.header("Thermal Cycler Protocol Configuration")
+  st.markdown("Configure your thermocycling instrument settings and run times.")
+
+  tc1, tc2, tc3 = st.columns(3)
+  with tc1:
+    init_temp = st.number_input(
+        "Init. Denaturation Temp (°C)", 90.0, 99.0, 95.0, key="tc_init_t"
+    )
+    init_time = st.number_input(
+        "Init. Denaturation Time (sec)", 10, 600, 180, key="tc_init_s"
+    )
+  with tc2:
+    num_cycles = st.number_input("Cycle Count", 10, 50, 35, key="tc_cycles")
+    denat_temp = st.number_input(
+        "Cycle Denat. Temp (°C)", 90.0, 98.0, 95.0, key="tc_den_t"
+    )
+    denat_time = st.number_input(
+        "Cycle Denat. Time (sec)", 5, 120, 30, key="tc_den_s"
+    )
+  with tc3:
+    anneal_temp = st.number_input(
+        "Annealing Temp (°C)", 45.0, 72.0, 58.0, key="tc_ann_t"
+    )
+    anneal_time = st.number_input(
+        "Annealing Time (sec)", 5, 120, 30, key="tc_ann_s"
+    )
+    extend_temp = st.number_input(
+        "Extension Temp (°C)", 60.0, 75.0, 72.0, key="tc_ext_t"
+    )
+    extend_time = st.number_input(
+        "Extension Time (sec)", 10, 300, 45, key="tc_ext_s"
+    )
+
+  final_ext_temp = st.number_input(
+      "Final Extension Temp (°C)", 60.0, 75.0, 72.0, key="f_temp"
+  )
+  final_ext_time = st.number_input(
+      "Final Extension Time (sec)", 0, 600, 300, key="f_time"
+  )
+
+  protocol_data = [
+      {
+          "Step": "Initial Denaturation",
+          "Temp (°C)": init_temp,
+          "Time": f"{init_time} sec",
+          "Cycles": "1",
+      },
+      {
+          "Step": "Denaturation",
+          "Temp (°C)": denat_temp,
+          "Time": f"{denat_time} sec",
+          "Cycles": f"{num_cycles}",
+      },
+      {
+          "Step": "Annealing",
+          "Temp (°C)": anneal_temp,
+          "Time": f"{anneal_time} sec",
+          "Cycles": f"{num_cycles}",
+      },
+      {
+          "Step": "Extension",
+          "Temp (°C)": extend_temp,
+          "Time": f"{extend_time} sec",
+          "Cycles": f"{num_cycles}",
+      },
+      {
+          "Step": "Final Extension",
+          "Temp (°C)": final_ext_temp,
+          "Time": f"{final_ext_time} sec",
+          "Cycles": "1",
+      },
+      {"Step": "Hold", "Temp (°C)": 4.0, "Time": "Indefinite", "Cycles": "1"},
+  ]
+
+  protocol_df = pd.DataFrame(protocol_data)
+  st.subheader("Protocol Summary Table")
+  st.dataframe(protocol_df, use_container_width=True)
+
+  total_cycling_seconds = init_time + (
+      num_cycles * (denat_time + anneal_time + extend_time)
+  ) + final_ext_time
+  st.info(
+      f"⏱️ **Estimated Total PCR Run Time:**"
+      f" ~{total_cycling_seconds / 60:.1f} minutes"
+  )
+
+# ==========================================
+# TAB 3: GEL ELECTROPHORESIS SIZE ESTIMATOR
+# ==========================================
+with tab3:
+  st.header("DNA Gel Electrophoresis Size Estimator")
+  st.markdown(
+      "Estimate unknown fragment sizes using log-linear migration analysis"
+      " against a DNA ladder."
+  )
+
+  col_gel1, col_gel2 = st.columns([1, 1])
+
+  with col_gel1:
+    st.subheader("1. DNA Ladder Standard")
+    if "ladder_df" not in st.session_state:
+      st.session_state.ladder_df = pd.DataFrame({
+          "Fragment Name": [
+              "10 kb",
+              "8 kb",
+              "6 kb",
+              "4 kb",
+              "3 kb",
+              "2 kb",
+              "1.5 kb",
+              "1 kb",
+          ],
+          "Size (bp)": [10000, 8000, 6000, 4000, 3000, 2000, 1500, 1000],
+          "Migration Distance (mm)": [
+              12.0,
+              15.5,
+              19.8,
+              26.5,
+              32.0,
+              41.0,
+              48.5,
+              58.0,
+          ],
+      })
+
+    edited_ladder = st.data_editor(
+        st.session_state.ladder_df,
+        num_rows="dynamic",
+        use_container_width=True,
+        key="gel_ladder",
+    )
+
+    unknown_distance = st.number_input(
+        "Unknown Band Migration Distance (mm from well)",
+        min_value=1.0,
+        max_value=150.0,
+        value=35.0,
+        step=0.5,
+        key="gel_unknown",
+    )
+
+  with col_gel2:
+    st.subheader("2. Standard Curve & Estimation")
+    valid_data = edited_ladder.dropna()
+    sizes = valid_data["Size (bp)"].values
+    distances = valid_data["Migration Distance (mm)"].values
+
+    if len(sizes) < 3:
+      st.warning(
+          "⚠️ Please provide at least 3 valid ladder points for the standard"
+          " curve."
+      )
+    else:
+      log_sizes = np.log10(sizes)
+      slope, intercept = np.polyfit(log_sizes, distances, 1)
+
+      estimated_log_size = (unknown_distance - intercept) / slope
+      estimated_size = 10**estimated_log_size
+
+      st.success(
+          f"🎯 **Estimated Fragment Size:** **{int(round(estimated_size))}"
+          " bp**"
+      )
+      st.info(
+          "📊 *Standard Curve Interpolated successfully via Log-Linear"
+          f" Regression (Slope: {slope:.2f}, Intercept: {intercept:.2f}).*"
+      )
+
+# ==========================================
+# TAB 4: MOLARITY & DILUTIONS CALCULATOR
+# ==========================================
+with tab4:
+  st.header("Molarity, Mass & Serial Dilution Calculator")
+  st.markdown(
+      "Perform rapid laboratory calculations for buffer preparation and"
+      " dilutions."
+  )
+
+  sub_tab1, sub_tab2 = st.tabs(
+      ["⚖️ Mass from Molarity", "🧪 Stock & Serial Dilutions"]
+  )
+
+  with sub_tab1:
+    st.subheader("Calculate Solute Mass Required")
+    col_m1, col_m2 = st.columns(2)
+    with col_m1:
+      target_conc = st.number_input(
+          "Target Concentration", value=1.0, format="%.4f", key="mol_conc"
+      )
+      unit_conc = st.selectbox(
+          "Concentration Unit",
+          ["M (mol/L)", "mM (mmol/L)", "µM (µmol/L)"],
+          key="mol_unit",
+      )
+      mw = st.number_input(
+          "Molecular Weight (g/mol or Da)",
+          value=150.0,
+          format="%.2f",
+          key="mol_mw",
+      )
+    with col_m2:
+      target_vol = st.number_input(
+          "Target Volume", value=100.0, format="%.2f", key="mol_vol"
+      )
+      unit_vol = st.selectbox(
+          "Volume Unit", ["mL", "L", "µL"], key="vol_unit"
+      )
+
+    conc_mol_l = target_conc
+    if "mM" in unit_conc:
+      conc_mol_l = target_conc / 1000.0
+    elif "µM" in unit_conc:
+      conc_mol_l = target_conc / 1000000.0
+
+    vol_l = target_vol
+    if "mL" in unit_vol:
+      vol_l = target_vol / 1000.0
+    elif "µL" in unit_vol:
+      vol_l = target_vol / 1000000.0
+
+    required_mass_g = conc_mol_l * vol_l * mw
+    required_mass_mg = required_mass_g * 1000.0
+    required_mass_ug = required_mass_g * 1000000.0
+
+    st.markdown("---")
+    st.success(
+        f"✅ **Required Solute Mass:** **{required_mass_g:.4f} g** ("
+        f"**{required_mass_mg:.2f} mg** / **{required_mass_ug:.1f} µg**)"
+    )
+
+  with sub_tab2:
+    st.subheader("Stock Dilution ($C_1V_1 = C_2V_2$)")
+    col_d1, col_d2 = st.columns(2)
+    with col_d1:
+      c1 = st.number_input(
+          "Stock Concentration ($C_1$)", value=10.0, format="%.2f", key="dil_c1"
+      )
+      v2 = st.number_input(
+          "Final Desired Volume ($V_2$, mL)",
+          value=10.0,
+          format="%.2f",
+          key="dil_v2",
+      )
+    with col_d2:
+      c2 = st.number_input(
+          "Final Desired Concentration ($C_2$)",
+          value=1.0,
+          format="%.2f",
+          key="dil_c2",
+      )
+
+    if c1 > 0:
+      v1 = (c2 * v2) / c1
+      v_diluent = v2 - v1
+      st.markdown("---")
+      st.info(
+          f"📌 **Preparation Instructions:** Mix **{v1:.3f} mL** of stock"
+          f" solution ($C_1$) with **{v_diluent:.3f} mL** of diluent"
+          f" (buffer/water) to achieve **{v2:.2f} mL** at concentration"
+          f" **{c2}**."
+      )
