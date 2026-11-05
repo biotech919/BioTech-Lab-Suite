@@ -2,8 +2,6 @@ from io import BytesIO
 import math
 import numpy as np
 import pandas as pd
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
-from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 import streamlit as st
 
 # --- 1. Page Configuration & Global Branding ---
