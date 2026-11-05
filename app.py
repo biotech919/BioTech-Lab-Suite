@@ -9,11 +9,6 @@ st.set_page_config(
 )
 
 # Sidebar Branding
-st.logo("https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=100")
-st.sidebar.image(
-    "https://images.unsplash.com/photo-1579154204601-01588f351e67?w=400",
-    caption="Precision Workflow Suite v2.2 (Lite)",
-)
 st.sidebar.markdown(
     "**All-In-One Research Toolkit**\nStandardized molecular biology calculations"
     " & workflow automation."
