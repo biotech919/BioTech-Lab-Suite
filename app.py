@@ -9,9 +9,14 @@ st.set_page_config(
 )
 
 # Sidebar Branding
+st.logo("https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=100")
+st.sidebar.image(
+    "https://images.unsplash.com/photo-1579154204601-01588f351e67?w=400",
+    caption="Precision Workflow Suite v2.5 (Inventory)",
+)
 st.sidebar.markdown(
     "**All-In-One Research Toolkit**\nStandardized molecular biology calculations"
-    " & cell culture tracking."
+    " & inventory management."
 )
 st.sidebar.markdown("---")
 
@@ -28,17 +33,18 @@ exp_date = st.sidebar.date_input("Experiment Date")
 st.title("🧬 BioTech Lab Suite: All-In-One Workbench")
 st.markdown(
     "Access your PCR master mix calculations, thermocycling protocols, gel"
-    " electrophoresis estimators, molarity tools, and cell culture trackers"
-    " from a single platform."
+    " electrophoresis estimators, molarity tools, cell culture trackers, and"
+    " lab inventory from a single platform."
 )
 
-# --- Create Main Navigation Tabs (5 Tabs) ---
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+# --- Create Main Navigation Tabs (6 Tabs) ---
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "🧪 PCR Master Mix",
     "🌡️ Thermal Cycler",
     "📏 Gel Estimator",
     "🧮 Molarity & Dilutions",
     "🧫 Cell Culture Tracker",
+    "📦 Reagent Inventory",
 ])
 
 # ==========================================
@@ -543,3 +549,89 @@ with tab5:
           "⚠️ Harvested count ($N_f$) must be greater than initial count ($N_i$)"
           " for PDT calculation."
       )
+
+# ==========================================
+# TAB 6: REAGENT & BUFFER INVENTORY MANAGER
+# ==========================================
+with tab6:
+  st.header("Laboratory Reagent & Buffer Inventory")
+  st.markdown(
+      "Track stock quantities, storage locations, and expiration dates across"
+      " your lab benches."
+  )
+
+  if "inventory_df" not in st.session_state:
+    st.session_state.inventory_df = pd.DataFrame([
+        {
+            "Item Name": "2X Taq Master Mix",
+            "Category": "Enzymes",
+            "Stock Quantity": 5,
+            "Unit": "vials (1 mL)",
+            "Storage": "-20°C Freezer",
+            "Status": "In Stock",
+        },
+        {
+            "Item Name": "Nuclease-Free Water",
+            "Category": "Buffers",
+            "Stock Quantity": 12,
+            "Unit": "bottles (500 mL)",
+            "Storage": "Room Temp",
+            "Status": "In Stock",
+        },
+        {
+            "Item Name": "10X TBE Buffer",
+            "Category": "Buffers",
+            "Stock Quantity": 2,
+            "Unit": "liters",
+            "Storage": "Room Temp",
+            "Status": "Low Stock",
+        },
+        {
+            "Item Name": "DMEM Cell Culture Medium",
+            "Category": "Cell Media",
+            "Stock Quantity": 4,
+            "Unit": "bottles (500 mL)",
+            "Storage": "+4°C Fridge",
+            "Status": "In Stock",
+        },
+        {
+            "Item Name": "Trypsin-EDTA (0.25%)",
+            "Category": "Cell Reagents",
+            "Stock Quantity": 1,
+            "Unit": "bottle (100 mL)",
+            "Storage": "-20°C Freezer",
+            "Status": "Low Stock",
+        },
+    ])
+
+  edited_inventory = st.data_editor(
+      st.session_state.inventory_df,
+      num_rows="dynamic",
+      use_container_width=True,
+      key="inv_editor",
+  )
+
+  st.markdown("---")
+  st.subheader("Inventory Summary & Alerts")
+
+  low_stock_items = edited_inventory[
+      edited_inventory["Status"] == "Low Stock"
+  ]
+  if not low_stock_items.empty:
+    st.warning(
+        "⚠️ **Low Stock Alert:** The following items require reordering soon:"
+        f" {', '.join(low_stock_items['Item Name'].tolist())}"
+    )
+  else:
+    st.success(
+        "✅ **Inventory Status:** All stock levels are currently adequate."
+    )
+
+  csv_inventory = edited_inventory.to_csv(index=False)
+  st.download_button(
+      label="📥 Download Inventory Sheet (CSV)",
+      data=csv_inventory,
+      file_name="lab_reagent_inventory.csv",
+      mime="text/csv",
+      key="inv_download",
+  )
