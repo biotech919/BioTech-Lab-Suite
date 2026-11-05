@@ -1,6 +1,11 @@
+from io import BytesIO
 import math
 import numpy as np
 import pandas as pd
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 import streamlit as st
 
 # --- 1. Page Configuration & Global Branding ---
@@ -9,14 +14,19 @@ st.set_page_config(
 )
 
 # Sidebar Branding
+st.logo("https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=100")
+st.sidebar.image(
+    "https://images.unsplash.com/photo-1579154204601-01588f351e67?w=400",
+    caption="Precision Workflow Suite v2.3 (No-Plot)",
+)
 st.sidebar.markdown(
     "**All-In-One Research Toolkit**\nStandardized molecular biology calculations"
-    " & workflow automation."
+    " & cell culture tracking."
 )
 st.sidebar.markdown("---")
 
-# --- Sidebar: Lab Metadata ---
-st.sidebar.header("📋 Lab Metadata")
+# --- Sidebar: Lab Metadata for PDF Reports ---
+st.sidebar.header("📋 Lab Report Metadata")
 researcher_name = st.sidebar.text_input(
     "Researcher Name", value="Dr. Jane Doe"
 )
@@ -28,16 +38,147 @@ exp_date = st.sidebar.date_input("Experiment Date")
 st.title("🧬 BioTech Lab Suite: All-In-One Workbench")
 st.markdown(
     "Access your PCR master mix calculations, thermocycling protocols, gel"
-    " electrophoresis estimators, and molarity/dilution tools from a single"
-    " platform."
+    " electrophoresis estimators, molarity tools, and cell culture trackers"
+    " from a single platform."
 )
 
-# --- Create Main Navigation Tabs (4 Tabs) ---
-tab1, tab2, tab3, tab4 = st.tabs([
+# --- PDF Generation Helper Function ---
+
+
+def create_lab_report_pdf(
+    pcr_df,
+    protocol_df,
+    base_reactions,
+    practical_reactions,
+    researcher,
+    nb_id,
+    date_str,
+):
+  buffer = BytesIO()
+  doc = SimpleDocTemplate(
+      buffer,
+      pagesize=letter,
+      rightMargin=36,
+      leftMargin=36,
+      topMargin=36,
+      bottomMargin=36,
+  )
+  elements = []
+
+  styles = getSampleStyleSheet()
+  title_style = ParagraphStyle(
+      "ReportTitle",
+      parent=styles["Heading1"],
+      fontSize=18,
+      textColor=colors.HexColor("#1f77b4"),
+      spaceAfter=4,
+  )
+  subtitle_style = ParagraphStyle(
+      "ReportSubtitle",
+      parent=styles["Normal"],
+      fontSize=9,
+      textColor=colors.HexColor("#666666"),
+      spaceAfter=12,
+  )
+  heading_style = ParagraphStyle(
+      "SectionHeading",
+      parent=styles["Heading2"],
+      fontSize=11,
+      textColor=colors.HexColor("#333333"),
+      spaceBefore=10,
+      spaceAfter=6,
+  )
+
+  # Header
+  elements.append(
+      Paragraph("🧬 BioTech Lab Suite - Experiment Summary Report", title_style)
+  )
+  elements.append(
+      Paragraph(
+          "Precision Workflow Suite | Standardized Molecular Biology Protocol",
+          subtitle_style,
+      )
+  )
+
+  # Metadata Table Block
+  meta_data = [
+      [
+          Paragraph(f"<b>Researcher:</b> {researcher}", styles["Normal"]),
+          Paragraph(f"<b>Date:</b> {date_str}", styles["Normal"]),
+      ],
+      [
+          Paragraph(f"<b>Notebook ID:</b> {nb_id}", styles["Normal"]),
+          Paragraph(
+              f"<b>Reactions:</b> {base_reactions} base ({practical_reactions}"
+              " w/ buffer)",
+              styles["Normal"],
+          ),
+      ],
+  ]
+  t_meta = Table(meta_data, colWidths=[270, 270])
+  t_meta.setStyle(
+      TableStyle([
+          ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8f9fa")),
+          ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#dcdcdc")),
+          ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e5e5e5")),
+          ("TOPPADDING", (0, 0), (-1, -1), 6),
+          ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+          ("LEFTPADDING", (0, 0), (-1, -1), 8),
+          ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+      ])
+  )
+  elements.append(t_meta)
+  elements.append(Spacer(1, 15))
+
+  # PCR Summary Section
+  elements.append(Paragraph("1. PCR Master Mix Preparation", heading_style))
+  pcr_table_data = [list(pcr_df.columns)] + pcr_df.values.tolist()
+  t_pcr = Table(pcr_table_data, colWidths=[240, 150, 150])
+  t_pcr.setStyle(
+      TableStyle([
+          ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f4f8")),
+          ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#1f77b4")),
+          ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+          ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+          ("FONTSIZE", (0, 0), (-1, -1), 9),
+          ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+          ("TOPPADDING", (0, 0), (-1, -1), 6),
+          ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#dcdcdc")),
+      ])
+  )
+  elements.append(t_pcr)
+  elements.append(Spacer(1, 15))
+
+  # Thermal Cycler Profile Section
+  elements.append(Paragraph("2. Thermal Cycler Protocol", heading_style))
+  proto_table_data = [list(protocol_df.columns)] + protocol_df.values.tolist()
+  t_proto = Table(proto_table_data, colWidths=[180, 120, 120, 120])
+  t_proto.setStyle(
+      TableStyle([
+          ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f4f8")),
+          ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#1f77b4")),
+          ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+          ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+          ("FONTSIZE", (0, 0), (-1, -1), 9),
+          ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+          ("TOPPADDING", (0, 0), (-1, -1), 6),
+          ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#dcdcdc")),
+      ])
+  )
+  elements.append(t_proto)
+
+  doc.build(elements)
+  buffer.seek(0)
+  return buffer
+
+
+# --- Create Main Navigation Tabs (5 Tabs) ---
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "🧪 PCR Master Mix",
     "🌡️ Thermal Cycler",
     "📏 Gel Estimator",
     "🧮 Molarity & Dilutions",
+    "🧫 Cell Culture Tracker",
 ])
 
 # ==========================================
@@ -179,18 +320,45 @@ with tab1:
           f"✅ **Total Master Mix Volume:** **{total_mix_volume:.2f} µL**"
       )
 
-      csv_data = full_master_mix_df[[
-          "Component",
-          "Vol_per_rxn_uL",
-          "Total_Volume_uL",
-      ]].to_csv(index=False)
-      st.download_button(
-          label="📥 Download Master Mix Sheet (CSV)",
-          data=csv_data,
-          file_name=f"pcr_master_mix_{base_reactions}rxns.csv",
-          mime="text/csv",
-          key="pcr_download",
-      )
+      col_dl1, col_dl2 = st.columns(2)
+      with col_dl1:
+        csv_data = full_master_mix_df[[
+            "Component",
+            "Vol_per_rxn_uL",
+            "Total_Volume_uL",
+        ]].to_csv(index=False)
+        st.download_button(
+            label="📥 Download CSV Sheet",
+            data=csv_data,
+            file_name=f"pcr_master_mix_{base_reactions}rxns.csv",
+            mime="text/csv",
+            key="pcr_download",
+        )
+
+      with col_dl2:
+        if "protocol_df" not in locals():
+          protocol_df = pd.DataFrame(
+              columns=["Step", "Temp (°C)", "Time", "Cycles"]
+          )
+
+        pdf_buffer = create_lab_report_pdf(
+            full_master_mix_df[
+                ["Component", "Vol_per_rxn_uL", "Total_Volume_uL"]
+            ],
+            protocol_df,
+            base_reactions,
+            practical_reactions,
+            researcher=researcher_name,
+            nb_id=notebook_id,
+            date_str=str(exp_date),
+        )
+        st.download_button(
+            label="📄 Download Lab Report (PDF)",
+            data=pdf_buffer,
+            file_name=f"lab_report_{notebook_id}.pdf",
+            mime="application/pdf",
+            key="pdf_download_btn",
+        )
 
       st.markdown("---")
       st.subheader("Benchside Pipetting Checklist")
@@ -368,9 +536,11 @@ with tab3:
           f"🎯 **Estimated Fragment Size:** **{int(round(estimated_size))}"
           " bp**"
       )
+      st.metric("Regression Slope ($m$)", f"{slope:.4f}")
+      st.metric("Regression Intercept ($b$)", f"{intercept:.4f}")
       st.info(
-          "📊 *Standard Curve Interpolated successfully via Log-Linear"
-          f" Regression (Slope: {slope:.2f}, Intercept: {intercept:.2f}).*"
+          "📊 Standard curve calculated via log-linear regression successfully"
+          " without external plotting dependencies."
       )
 
 # ==========================================
@@ -465,4 +635,82 @@ with tab4:
           f" solution ($C_1$) with **{v_diluent:.3f} mL** of diluent"
           f" (buffer/water) to achieve **{v2:.2f} mL** at concentration"
           f" **{c2}**."
+      )
+
+# ==========================================
+# TAB 5: CELL CULTURE TRACKER
+# ==========================================
+with tab5:
+  st.header("Mammalian Cell Culture Passaging & Doubling Time Tracker")
+  st.markdown(
+      "Calculate split ratios, monitor cell confluence, and determine"
+      " population doubling time (PDT)."
+  )
+
+  c_col1, c_col2 = st.columns(2)
+
+  with c_col1:
+    st.subheader("1. Seeding & Confluence Parameters")
+    cell_line = st.text_input("Cell Line Name", value="HEK293T")
+    current_confluence = st.slider(
+        "Current Confluence (%)", min_value=10, max_value=100, value=80, step=5
+    )
+    target_split_confluence = st.slider(
+        "Target Seeding Confluence (%)",
+        min_value=10,
+        max_value=90,
+        value=30,
+        step=5,
+    )
+    flask_growth_area = st.selectbox(
+        "Culture Vessel Size",
+        ["T-25 flask (25 cm²)", "T-75 flask (75 cm²)", "10 cm dish (55 cm²)"],
+    )
+
+    estimated_split_ratio = current_confluence / target_split_confluence
+    st.info(
+        f"📌 **Recommended Split Ratio:** ~1:{estimated_split_ratio:.1f}"
+        f" (based on {current_confluence}% to {target_split_confluence}% target)"
+    )
+
+  with c_col2:
+    st.subheader("2. Population Doubling Time (PDT)")
+    st.markdown(
+        "Formula: $PDT = \\frac{t \\times \\log(2)}{\\log(N_f) - \\log(N_i)}$"
+    )
+
+    n_initial = st.number_input(
+        "Initial Cell Count ($N_i$, e.g., seeded)",
+        value=0.5,
+        format="%.2f",
+        help="In millions",
+    )
+    n_final = st.number_input(
+        "Harvested Cell Count ($N_f$, e.g., collected)",
+        value=4.0,
+        format="%.2f",
+        help="In millions",
+    )
+    time_elapsed_hrs = st.number_input(
+        "Time Elapsed ($t$, hours)",
+        min_value=1.0,
+        max_value=336.0,
+        value=72.0,
+        step=1.0,
+    )
+
+    if n_initial > 0 and n_final > n_initial and time_elapsed_hrs > 0:
+      pdt_hours = (
+          time_elapsed_hrs
+          * np.log10(2)
+          / (np.log10(n_final) - np.log10(n_initial))
+      )
+      num_doublings = (np.log10(n_final) - np.log10(n_initial)) / np.log10(2)
+
+      st.success(f"⏱️ **Population Doubling Time (PDT):** **{pdt_hours:.2f} hours**")
+      st.metric("Total Population Doublings", f"{num_doublings:.2f} doublings")
+    else:
+      st.warning(
+          "⚠️ Harvested count ($N_f$) must be greater than initial count ($N_i$)"
+          " for PDT calculation."
       )
