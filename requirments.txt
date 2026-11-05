@@ -1,5 +1,3 @@
-matplotlib
 snumpy
 panda
-reportlab
 streamlit
