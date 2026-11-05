@@ -1,6 +1,12 @@
+from io import BytesIO
 import math
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 import streamlit as st
 
 # --- 1. Page Configuration & Global Branding ---
@@ -12,7 +18,7 @@ st.set_page_config(
 st.logo("https://images.unsplash.com/photo-1532187863486-abf9dbad1b69?w=100")
 st.sidebar.image(
     "https://images.unsplash.com/photo-1579154204601-01588f351e67?w=400",
-    caption="Precision Workflow Suite v2.2 (Lite)",
+    caption="Precision Workflow Suite v2.2",
 )
 st.sidebar.markdown(
     "**All-In-One Research Toolkit**\nStandardized molecular biology calculations"
@@ -20,8 +26,8 @@ st.sidebar.markdown(
 )
 st.sidebar.markdown("---")
 
-# --- Sidebar: Lab Metadata ---
-st.sidebar.header("📋 Lab Metadata")
+# --- Sidebar: Lab Metadata for PDF Reports ---
+st.sidebar.header("📋 Lab Report Metadata")
 researcher_name = st.sidebar.text_input(
     "Researcher Name", value="Dr. Jane Doe"
 )
@@ -36,6 +42,136 @@ st.markdown(
     " electrophoresis estimators, and molarity/dilution tools from a single"
     " platform."
 )
+
+# --- PDF Generation Helper Function ---
+
+
+def create_lab_report_pdf(
+    pcr_df,
+    protocol_df,
+    base_reactions,
+    practical_reactions,
+    researcher,
+    nb_id,
+    date_str,
+):
+  buffer = BytesIO()
+  doc = SimpleDocTemplate(
+      buffer,
+      pagesize=letter,
+      rightMargin=36,
+      leftMargin=36,
+      topMargin=36,
+      bottomMargin=36,
+  )
+  elements = []
+
+  styles = getSampleStyleSheet()
+  title_style = ParagraphStyle(
+      "ReportTitle",
+      parent=styles["Heading1"],
+      fontSize=18,
+      textColor=colors.HexColor("#1f77b4"),
+      spaceAfter=4,
+  )
+  subtitle_style = ParagraphStyle(
+      "ReportSubtitle",
+      parent=styles["Normal"],
+      fontSize=9,
+      textColor=colors.HexColor("#666666"),
+      spaceAfter=12,
+  )
+  heading_style = ParagraphStyle(
+      "SectionHeading",
+      parent=styles["Heading2"],
+      fontSize=11,
+      textColor=colors.HexColor("#333333"),
+      spaceBefore=10,
+      spaceAfter=6,
+  )
+
+  # Header
+  elements.append(
+      Paragraph("🧬 BioTech Lab Suite - Experiment Summary Report", title_style)
+  )
+  elements.append(
+      Paragraph(
+          "Precision Workflow Suite | Standardized Molecular Biology Protocol",
+          subtitle_style,
+      )
+  )
+
+  # Metadata Table Block
+  meta_data = [
+      [
+          Paragraph(f"<b>Researcher:</b> {researcher}", styles["Normal"]),
+          Paragraph(f"<b>Date:</b> {date_str}", styles["Normal"]),
+      ],
+      [
+          Paragraph(f"<b>Notebook ID:</b> {nb_id}", styles["Normal"]),
+          Paragraph(
+              f"<b>Reactions:</b> {base_reactions} base ({practical_reactions}"
+              " w/ buffer)",
+              styles["Normal"],
+          ),
+      ],
+  ]
+  t_meta = Table(meta_data, colWidths=[270, 270])
+  t_meta.setStyle(
+      TableStyle([
+          ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#f8f9fa")),
+          ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#dcdcdc")),
+          ("INNERGRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#e5e5e5")),
+          ("TOPPADDING", (0, 0), (-1, -1), 6),
+          ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+          ("LEFTPADDING", (0, 0), (-1, -1), 8),
+          ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+      ])
+  )
+  elements.append(t_meta)
+  elements.append(Spacer(1, 15))
+
+  # PCR Summary Section
+  elements.append(Paragraph("1. PCR Master Mix Preparation", heading_style))
+  pcr_table_data = [list(pcr_df.columns)] + pcr_df.values.tolist()
+  t_pcr = Table(pcr_table_data, colWidths=[240, 150, 150])
+  t_pcr.setStyle(
+      TableStyle([
+          ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f4f8")),
+          ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#1f77b4")),
+          ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+          ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+          ("FONTSIZE", (0, 0), (-1, -1), 9),
+          ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+          ("TOPPADDING", (0, 0), (-1, -1), 6),
+          ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#dcdcdc")),
+      ])
+  )
+  elements.append(t_pcr)
+  elements.append(Spacer(1, 15))
+
+  # Thermal Cycler Profile Section
+  elements.append(Paragraph("2. Thermal Cycler Protocol", heading_style))
+  proto_table_data = [list(protocol_df.columns)] + protocol_df.values.tolist()
+  t_proto = Table(proto_table_data, colWidths=[180, 120, 120, 120])
+  t_proto.setStyle(
+      TableStyle([
+          ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#f0f4f8")),
+          ("TEXTCOLOR", (0, 0), (-1, 0), colors.HexColor("#1f77b4")),
+          ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+          ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+          ("FONTSIZE", (0, 0), (-1, -1), 9),
+          ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+          ("TOPPADDING", (0, 0), (-1, -1), 6),
+          ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#dcdcdc")),
+      ])
+  )
+  elements.append(t_proto)
+
+  doc.build(elements)
+  buffer.seek(0)
+  return buffer
+
 
 # --- Create Main Navigation Tabs (4 Tabs) ---
 tab1, tab2, tab3, tab4 = st.tabs([
@@ -184,18 +320,47 @@ with tab1:
           f"✅ **Total Master Mix Volume:** **{total_mix_volume:.2f} µL**"
       )
 
-      csv_data = full_master_mix_df[[
-          "Component",
-          "Vol_per_rxn_uL",
-          "Total_Volume_uL",
-      ]].to_csv(index=False)
-      st.download_button(
-          label="📥 Download Master Mix Sheet (CSV)",
-          data=csv_data,
-          file_name=f"pcr_master_mix_{base_reactions}rxns.csv",
-          mime="text/csv",
-          key="pcr_download",
-      )
+      # Export Buttons
+      col_dl1, col_dl2 = st.columns(2)
+      with col_dl1:
+        csv_data = full_master_mix_df[[
+            "Component",
+            "Vol_per_rxn_uL",
+            "Total_Volume_uL",
+        ]].to_csv(index=False)
+        st.download_button(
+            label="📥 Download CSV Sheet",
+            data=csv_data,
+            file_name=f"pcr_master_mix_{base_reactions}rxns.csv",
+            mime="text/csv",
+            key="pcr_download",
+        )
+
+      with col_dl2:
+        # Define protocol_df placeholder for PDF export if Tab 2 isn't visited yet
+        if "protocol_df" not in locals():
+          protocol_df = pd.DataFrame(
+              columns=["Step", "Temp (°C)", "Time", "Cycles"]
+          )
+
+        pdf_buffer = create_lab_report_pdf(
+            full_master_mix_df[
+                ["Component", "Vol_per_rxn_uL", "Total_Volume_uL"]
+            ],
+            protocol_df,
+            base_reactions,
+            practical_reactions,
+            researcher=researcher_name,
+            nb_id=notebook_id,
+            date_str=str(exp_date),
+        )
+        st.download_button(
+            label="📄 Download Lab Report (PDF)",
+            data=pdf_buffer,
+            file_name=f"lab_report_{notebook_id}.pdf",
+            mime="application/pdf",
+            key="pdf_download_btn",
+        )
 
       st.markdown("---")
       st.subheader("Benchside Pipetting Checklist")
@@ -373,10 +538,29 @@ with tab3:
           f"🎯 **Estimated Fragment Size:** **{int(round(estimated_size))}"
           " bp**"
       )
-      st.info(
-          "📊 *Standard Curve Interpolated successfully via Log-Linear"
-          f" Regression (Slope: {slope:.2f}, Intercept: {intercept:.2f}).*"
+
+      fig, ax = plt.subplots(figsize=(5, 3.5))
+      ax.scatter(
+          log_sizes, distances, color="purple", label="Standards", zorder=3
       )
+      fit_distances = np.polyval([slope, intercept], log_sizes)
+      ax.plot(
+          log_sizes, fit_distances, color="orange", linestyle="--", label="Fit"
+      )
+      ax.scatter(
+          [estimated_log_size],
+          [unknown_distance],
+          color="red",
+          marker="*",
+          s=200,
+          label="Unknown",
+          zorder=4,
+      )
+      ax.set_xlabel("log10(Size in bp)")
+      ax.set_ylabel("Distance (mm)")
+      ax.legend(fontsize=8)
+      ax.grid(True, linestyle=":", alpha=0.6)
+      st.pyplot(fig)
 
 # ==========================================
 # TAB 4: MOLARITY & DILUTIONS CALCULATOR
