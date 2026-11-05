@@ -1,3 +1,5 @@
-snumpy
-panda
 streamlit
+pandas
+numpy
+matplotlib
+reportlab
